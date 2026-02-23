@@ -7,7 +7,9 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/IPampurin/UrlShortener/pkg/cache"
 	"github.com/IPampurin/UrlShortener/pkg/configuration"
+	"github.com/IPampurin/UrlShortener/pkg/db"
 	"github.com/IPampurin/UrlShortener/pkg/server"
 	"github.com/wb-go/wbf/logger"
 )
@@ -18,14 +20,8 @@ func main() {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-
 	// запускаем горутину обработки сигналов
-	go func() {
-		<-sigChan
-		cancel()
-	}()
+	go signalHandler(ctx, cancel)
 
 	var err error
 
@@ -46,21 +42,21 @@ func main() {
 		log.Fatalf("Ошибка создания логгера: %v", err)
 	}
 	defer func() { _ = appLogger.(*logger.ZapAdapter) }()
-	/*
-		// подключаем базу данных
-		err = db.InitDB(&cfg.DB)
-		if err != nil {
-			appLogger.Error("ошибка подключения к БД", "error", err)
-			return
-		}
-		defer func() { _ = db.CloseDB() }()
 
-		// инициализируем кэш
-		err = cache.InitRedis(&cfg.Redis)
-		if err != nil {
-			appLogger.Warn("кэш не работает", "error", err)
-		}
-	*/
+	// подключаем базу данных
+	err = db.InitDB(ctx, &cfg.DB, appLogger)
+	if err != nil {
+		appLogger.Error("ошибка подключения к БД", "error", err)
+		return
+	}
+	defer func() { _ = db.CloseDB() }()
+
+	// инициализируем кэш
+	err = cache.InitRedis(ctx, &cfg.Redis, appLogger)
+	if err != nil {
+		appLogger.Warn("кэш не работает", "error", err)
+	}
+
 	// запускаем сервер
 	err = server.Run(ctx, &cfg.Server, appLogger)
 	if err != nil {
@@ -70,4 +66,20 @@ func main() {
 	}
 
 	appLogger.Info("Приложение корректно завершено")
+}
+
+// signalHandler обрабатывет сигналы отмены
+func signalHandler(ctx context.Context, cancel context.CancelFunc) {
+
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	defer signal.Stop(sigChan)
+
+	select {
+	case <-ctx.Done():
+		return
+	case <-sigChan:
+		cancel()
+		return
+	}
 }
