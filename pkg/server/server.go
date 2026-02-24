@@ -28,15 +28,15 @@ func Run(ctx context.Context, cfgServer *configuration.ConfServer, log logger.Lo
 		// используем переданный логгер для записи информации о запросе
 		log.LogRequest(c.Request.Context(), c.Request.Method, c.Request.URL.Path, c.Writer.Status(), duration)
 	})
-
-	// регистрируем эндпоинты
-	apiGroup := engine.Group("/notify")
-	{
-		//	apiGroup.POST("/", api.CreateNotificationHandler(log))
-		//	apiGroup.GET("/:id", api.GetNotificationHandler(log))
-		//	apiGroup.DELETE("/:id", api.DeleteNotificationHandler(log))
-	}
-
+	/*
+		// регистрируем эндпоинты
+		apiGroup := engine.Group("/notify")
+		{
+			apiGroup.POST("/", api.CreateShortLinkHandler(log))
+			apiGroup.GET("/:id", api.GetNotificationHandler(log))
+			apiGroup.DELETE("/:id", api.DeleteNotificationHandler(log))
+		}
+	*/
 	// раздаём статические файлы из папки ./web
 	engine.Static("/static", "./web")
 

@@ -7,7 +7,6 @@ import (
 	"os/signal"
 	"syscall"
 
-	"github.com/IPampurin/UrlShortener/pkg/cache"
 	"github.com/IPampurin/UrlShortener/pkg/configuration"
 	"github.com/IPampurin/UrlShortener/pkg/db"
 	"github.com/IPampurin/UrlShortener/pkg/server"
@@ -50,13 +49,13 @@ func main() {
 		return
 	}
 	defer func() { _ = db.CloseDB() }()
-
-	// инициализируем кэш
-	err = cache.InitRedis(ctx, &cfg.Redis, appLogger)
-	if err != nil {
-		appLogger.Warn("кэш не работает", "error", err)
-	}
-
+	/*
+		// инициализируем кэш
+		err = cache.InitRedis(ctx, &cfg.Redis, appLogger)
+		if err != nil {
+			appLogger.Warn("кэш не работает", "error", err)
+		}
+	*/
 	// запускаем сервер
 	err = server.Run(ctx, &cfg.Server, appLogger)
 	if err != nil {
