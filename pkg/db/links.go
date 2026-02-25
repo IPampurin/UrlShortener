@@ -51,6 +51,29 @@ func (c *ClientPostgres) GetLinkByShortURL(ctx context.Context, shortURL string)
 	return linkDB, nil
 }
 
+// GetLinkByOriginalURL получает из таблицы links БД запись по длинной ссылке
+func (c *ClientPostgres) GetLinkByOriginalURL(ctx context.Context, originalURL string) (*LinkDB, error) {
+
+	query := `SELECT * 
+	            FROM links 
+			   WHERE original_url = $1`
+
+	linkDB := &LinkDB{}
+
+	err := c.Pool.QueryRow(ctx, query, originalURL).
+		Scan(&linkDB.ID,
+			&linkDB.ShortURL,
+			&linkDB.OriginalURL,
+			&linkDB.CreatedAt,
+			&linkDB.IsCustom,
+			&linkDB.ClicksCount)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка получения записи о ссылке в GetLinkOriginalURL: %w", err)
+	}
+
+	return linkDB, nil
+}
+
 // IncrementClicks увеличивает счётчик переходов по ссылке
 func (c *ClientPostgres) IncrementClicks(ctx context.Context, linkID int64) error {
 

@@ -2,6 +2,8 @@ package api
 
 import "time"
 
+const sizeShortUrl = 6 // длина сгенерированной короткой ссылки ShortURL по умолчанию
+
 // CreateShortLinkRequest - тело запроса на создание короткой ссылки
 type CreateShortLinkRequest struct {
 	OriginalURL string `json:"original_url" binding:"required,url"`
