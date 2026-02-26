@@ -6,37 +6,36 @@ import (
 	"time"
 )
 
-// CreateAnalytics записывает каждый переход
-func (c *ClientPostgres) CreateAnalytics(ctx context.Context, linkID int, accessedAt time.Time, userAgent, ipAddress, referer string) error {
+// SaveAnalytics записывает каждый переход
+func (d *DataBase) SaveAnalytics(ctx context.Context, analytics *Analytics) error {
 
 	query := `INSERT INTO analytics (link_id, accessed_at, user_agent, ip_address, referer)
-              VALUES ($1, NOW(), $2, $3, $4)`
+              VALUES ($1, $2, $3, $4, $5)`
 
-	_, err := c.Pool.Exec(ctx, query, linkID, time.Now(), userAgent, ipAddress, referer)
+	_, err := d.Pool.Exec(ctx, query, analytics.LinkID, analytics.AccessedAt, analytics.UserAgent, analytics.IPAddress, analytics.Referer)
 	if err != nil {
-		return fmt.Errorf("ошибка добавления записи о переходе в CreateAnalytics: %w", err)
+		return fmt.Errorf("ошибка добавления записи о переходе в SaveAnalytics: %w", err)
 	}
 
 	return nil
-
 }
 
 // GetAnalyticsByLinkID получение всех записей для конкретной ссылки
-func (c *ClientPostgres) GetAnalyticsByLinkID(ctx context.Context, linkID int) ([]*AnalyticsDB, error) {
+func (d *DataBase) GetAnalyticsByLinkID(ctx context.Context, linkID int) ([]*Analytics, error) {
 
 	query := `SELECT *
-	            FROM analytics 
+	            FROM analytics
 			   WHERE link_id = $1`
 
-	rows, err := c.Pool.Query(ctx, query, linkID)
+	rows, err := d.Pool.Query(ctx, query, linkID)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при получении списка записей в GetAnalyticsByLinkID: %w", err)
 	}
 	defer rows.Close()
 
-	var analitics []*AnalyticsDB
+	var analitics []*Analytics
 	for rows.Next() {
-		var a AnalyticsDB
+		var a Analytics
 		err := rows.Scan(
 			&a.ID,
 			&a.LinkID,
@@ -62,7 +61,7 @@ func (c *ClientPostgres) GetAnalyticsByLinkID(ctx context.Context, linkID int) (
 // агрегация
 
 // CountClicksByDay - группировка по дням
-func (c *ClientPostgres) CountClicksByDay(ctx context.Context, linkID int, from, to time.Time) (map[string]int, error) {
+func (d *DataBase) CountClicksByDay(ctx context.Context, linkID int, from, to time.Time) (map[string]int, error) {
 
 	query := `SELECT DATE(accessed_at) AS day,
 	                 COUNT(*) AS count
@@ -71,7 +70,7 @@ func (c *ClientPostgres) CountClicksByDay(ctx context.Context, linkID int, from,
                  AND accessed_at >= $2 AND accessed_at < $3
                GROUP BY day`
 
-	rows, err := c.Pool.Query(ctx, query, linkID, from, to)
+	rows, err := d.Pool.Query(ctx, query, linkID, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при выполнении запроса в CountClicksByDay: %w", err)
 	}
@@ -100,7 +99,7 @@ func (c *ClientPostgres) CountClicksByDay(ctx context.Context, linkID int, from,
 }
 
 // CountClicksByMonth - группировка по месяцам
-func (c *ClientPostgres) CountClicksByMonth(ctx context.Context, linkID int, from, to time.Time) (map[string]int, error) {
+func (d *DataBase) CountClicksByMonth(ctx context.Context, linkID int, from, to time.Time) (map[string]int, error) {
 
 	query := `SELECT TO_CHAR(accessed_at, 'YYYY-MM') AS month,
 	                 COUNT(*) AS count
@@ -109,7 +108,7 @@ func (c *ClientPostgres) CountClicksByMonth(ctx context.Context, linkID int, fro
                  AND accessed_at >= $2 AND accessed_at < $3
                GROUP BY month`
 
-	rows, err := c.Pool.Query(ctx, query, linkID, from, to)
+	rows, err := d.Pool.Query(ctx, query, linkID, from, to)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при выполнении запроса в CountClicksByMonth: %w", err)
 	}
@@ -138,7 +137,7 @@ func (c *ClientPostgres) CountClicksByMonth(ctx context.Context, linkID int, fro
 }
 
 // CountClicksByUserAgent - группировка по User-Agent
-func (c *ClientPostgres) CountClicksByUserAgent(ctx context.Context, linkID int) (map[string]int, error) {
+func (d *DataBase) CountClicksByUserAgent(ctx context.Context, linkID int) (map[string]int, error) {
 
 	query := `SELECT user_agent,
 	                 COUNT(*) AS count
@@ -146,7 +145,7 @@ func (c *ClientPostgres) CountClicksByUserAgent(ctx context.Context, linkID int)
                WHERE link_id = $1
 			   GROUP BY user_agent`
 
-	rows, err := c.Pool.Query(ctx, query, linkID)
+	rows, err := d.Pool.Query(ctx, query, linkID)
 	if err != nil {
 		return nil, fmt.Errorf("ошибка при выполнении запроса в CountClicksByUserAgent: %w", err)
 	}

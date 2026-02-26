@@ -30,18 +30,18 @@ const (
 )
 
 // Migration создаёт таблицы links и analytics, если они ещё не существуют, добавляет индексы
-func (c *ClientPostgres) Migration(ctx context.Context) error {
+func (d *DataBase) Migration(ctx context.Context) error {
 
 	// создаём таблицу links с индексами
 	query := linksSchema
-	_, err := c.Pool.Exec(ctx, query)
+	_, err := d.Pool.Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("ошибка создания таблицы links: %w", err)
 	}
 
 	// создаём таблицу analytics с индексами
 	query = analyticsSchema
-	_, err = c.Pool.Exec(ctx, query)
+	_, err = d.Pool.Exec(ctx, query)
 	if err != nil {
 		return fmt.Errorf("ошибка создания таблицы analytics: %w", err)
 	}

@@ -6,13 +6,14 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/IPampurin/UrlShortener/pkg/api"
 	"github.com/IPampurin/UrlShortener/pkg/configuration"
 	"github.com/gin-gonic/gin"
 	"github.com/wb-go/wbf/ginext"
 	"github.com/wb-go/wbf/logger"
 )
 
-func Run(ctx context.Context, cfgServer *configuration.ConfServer, log logger.Logger) error {
+func Run(ctx context.Context, cfgServer *configuration.ConfServer, service *ClientService, log logger.Logger) error {
 
 	// создаём движок Gin через обёртку ginext
 	engine := ginext.New(cfgServer.GinMode)
@@ -28,15 +29,16 @@ func Run(ctx context.Context, cfgServer *configuration.ConfServer, log logger.Lo
 		// используем переданный логгер для записи информации о запросе
 		log.LogRequest(c.Request.Context(), c.Request.Method, c.Request.URL.Path, c.Writer.Status(), duration)
 	})
-	/*
-		// регистрируем эндпоинты
-		apiGroup := engine.Group("/notify")
-		{
-			apiGroup.POST("/", api.CreateShortLinkHandler(log))
-			apiGroup.GET("/:id", api.GetNotificationHandler(log))
-			apiGroup.DELETE("/:id", api.DeleteNotificationHandler(log))
-		}
-	*/
+
+	// регистрируем эндпоинты
+	apiGroup := engine.Group("/notify")
+	{
+		apiGroup.POST("/shorten", api.CreateShortLink(log))          // создание новой сокращённой ссылки
+		apiGroup.GET("/s/:short_url", api.Redirect(log))             // переход по короткой ссылке
+		apiGroup.GET("/analytics/:short_url", api.GetAnalytics(log)) // получение аналитики (число и время переходов, User-Agent)
+		apiGroup.GET("/links", api.GetLinks(log))                    // список последних ссылок для UI
+	}
+
 	// раздаём статические файлы из папки ./web
 	engine.Static("/static", "./web")
 

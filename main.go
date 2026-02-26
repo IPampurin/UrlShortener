@@ -7,9 +7,11 @@ import (
 	"os/signal"
 	"syscall"
 
+	"github.com/IPampurin/UrlShortener/pkg/cache"
 	"github.com/IPampurin/UrlShortener/pkg/configuration"
 	"github.com/IPampurin/UrlShortener/pkg/db"
 	"github.com/IPampurin/UrlShortener/pkg/server"
+	"github.com/IPampurin/UrlShortener/pkg/service"
 	"github.com/wb-go/wbf/logger"
 )
 
@@ -21,8 +23,6 @@ func main() {
 
 	// запускаем горутину обработки сигналов
 	go signalHandler(ctx, cancel)
-
-	var err error
 
 	// считываем .env файл
 	cfg, err := configuration.ReadConfig()
@@ -42,22 +42,29 @@ func main() {
 	}
 	defer func() { _ = appLogger.(*logger.ZapAdapter) }()
 
-	// подключаем базу данных
-	err = db.InitDB(ctx, &cfg.DB, appLogger)
+	// получаем экземпляр хранилища
+	storage, err := db.InitDB(ctx, &cfg.DB, appLogger)
 	if err != nil {
 		appLogger.Error("ошибка подключения к БД", "error", err)
 		return
 	}
-	defer func() { _ = db.CloseDB() }()
-	/*
-		// инициализируем кэш
-		err = cache.InitRedis(ctx, &cfg.Redis, appLogger)
-		if err != nil {
-			appLogger.Warn("кэш не работает", "error", err)
-		}
-	*/
+	defer func() { _ = db.CloseDB(storage) }()
+
+	// получаем экземпляр кэша
+	cache, err := cache.InitCache(ctx, &cfg.Redis, appLogger)
+	if err != nil {
+		appLogger.Warn("кэш не работает", "error", err)
+	}
+
+	// получаем экземпляр слоя бизнес-логики
+	service, err := service.InitService(ctx, storage, cache, appLogger)
+	if err != nil {
+		appLogger.Error("ошибка инициализации слоя бизнес-логики", "error", err)
+		return
+	}
+
 	// запускаем сервер
-	err = server.Run(ctx, &cfg.Server, appLogger)
+	err = server.Run(ctx, &cfg.Server, service, appLogger)
 	if err != nil {
 		appLogger.Error("Ошибка сервера", "error", err)
 		cancel()
