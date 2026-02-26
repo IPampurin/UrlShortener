@@ -51,17 +51,13 @@ func main() {
 	defer func() { _ = db.CloseDB(storage) }()
 
 	// получаем экземпляр кэша
-	cache, err := cache.InitCache(ctx, &cfg.Redis, appLogger)
+	cache, err := cache.InitCache(ctx, storage, &cfg.Redis, appLogger)
 	if err != nil {
 		appLogger.Warn("кэш не работает", "error", err)
 	}
 
 	// получаем экземпляр слоя бизнес-логики
-	service, err := service.InitService(ctx, storage, cache, appLogger)
-	if err != nil {
-		appLogger.Error("ошибка инициализации слоя бизнес-логики", "error", err)
-		return
-	}
+	service := service.InitService(ctx, storage, cache, appLogger)
 
 	// запускаем сервер
 	err = server.Run(ctx, &cfg.Server, service, appLogger)

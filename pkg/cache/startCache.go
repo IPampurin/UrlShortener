@@ -3,9 +3,9 @@ package cache
 import (
 	"context"
 	"fmt"
-	"time"
 
 	"github.com/IPampurin/UrlShortener/pkg/configuration"
+	"github.com/IPampurin/UrlShortener/pkg/db"
 	"github.com/wb-go/wbf/logger"
 	"github.com/wb-go/wbf/redis"
 )
@@ -21,7 +21,7 @@ type Cache struct {
 }
 
 // InitCache запускает работу с Redis
-func InitCache(ctx context.Context, cfgCache *configuration.ConfCache, log logger.Logger) (*Cache, error) {
+func InitCache(ctx context.Context, storage *db.DataBase, cfgCache *configuration.ConfCache, log logger.Logger) (*Cache, error) {
 
 	// определяем конфигурацию подключения к Redis
 	options := redis.Options{
@@ -38,55 +38,31 @@ func InitCache(ctx context.Context, cfgCache *configuration.ConfCache, log logge
 	}
 
 	// проверяем подключение
-	if err := clientRedis.Ping(context.Background()); err != nil {
+	err = clientRedis.Ping(context.Background())
+	if err != nil {
 		return nil, fmt.Errorf("ошибка подключения к Redis: %v\n", err)
 	}
 
 	// получаем экземпляр
 	cache := &Cache{clientRedis}
 
-	// загружаем начальные данные
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	/*
-		err = loadDataToCache(ctx, cfgCache)
+	// прогреваем кэш, если с ним всё норм
+	if cache != nil {
+
+		// получаем список крайних записей
+		links, err := storage.GetLinksOfPeriod(ctx, cfgCache.Warming)
 		if err != nil {
-			log.Error("ошибка загрузки первичных данных в кэш: %v", err)
-			return nil, err
+			log.Warn("ошибка прогрева кэша", "error", err)
 		}
-	*/
-	log.Info("Кэш прогрет и работает.")
+
+		// грузим записи в кэш
+		err = cache.LoadDataToCache(ctx, links, cfgCache.TTL)
+		if err != nil {
+			log.Warn("ошибка прогрева кэша", "error", err)
+		}
+	}
+
+	log.Info("Кэш работает.")
 
 	return cache, nil
 }
-
-/*
-// loadDataToCache загружает данные за последнее время в кэш при старте
-func loadDataToCache(ctx context.Context, cfg *configuration.ConfCache) error {
-
-	// получаем заказы до установленного порога
-	notifications, err := db.GetClientDB().GetNotificationsLastPeriod(ctx, cfg.Warming)
-	if err != nil {
-		return fmt.Errorf("ошибка получения уведомлений из БД при прогреве кэша: %v", err)
-	}
-	// проверяем были ли уведомления в БД
-	if len(notifications) == 0 {
-		return nil
-	}
-
-	// определяем стратегию ретраев
-	strategy := retry.Strategy{Attempts: 3, Delay: 100 * time.Millisecond, Backoff: 2}
-
-	// сохраняем данные в redis
-	for i := range notifications {
-		key := notifications[i].UID.String()
-		err := GetClientRedis().SetWithExpirationAndRetry(ctx, strategy, key, notifications[i], cfg.TTL)
-		if err != nil {
-			log.Printf("ошибка добавления уведомления %s при прогреве кэша", key)
-			continue
-		}
-	}
-
-	return nil
-}
-*/

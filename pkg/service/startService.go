@@ -12,12 +12,16 @@ import (
 type Service struct {
 	link      interfaces.LinkMethods
 	analytics interfaces.AnalyticsMethods
-	cache     interfaces.CacheMetods
+	cache     interfaces.CacheMethods
 }
 
-func InitService(ctx context.Context, storage *db.DataBase, cache *cache.Cache, appLogger logger.Logger) (*Service, error) {
+func InitService(ctx context.Context, storage *db.DataBase, cache *cache.Cache, log logger.Logger) *Service {
 
-	svc := &Service{}
+	svc := &Service{
+		link:      storage, // *db.DataBase реализует LinkMethods
+		analytics: storage, // *db.DataBase реализует AnalyticsMethods
+		cache:     cache,   // *cache.Cache реализует CacheMethods
+	}
 
-	return svc, nil
+	return svc
 }

@@ -9,11 +9,12 @@ import (
 
 // методы по таблице Link
 type LinkMethods interface {
-	SaveLink(ctx context.Context, link *db.Link) error
+	CreateLink(ctx context.Context, originalURL, shortURL string, isCustom bool) (*db.Link, error)
 	GetLinkByShortURL(ctx context.Context, shortURL string) (*db.Link, error)
 	GetLinkByOriginalURL(ctx context.Context, originalURL string) ([]*db.Link, error)
 	IncrementClicks(ctx context.Context, linkID int64) error
 	GetLinks(ctx context.Context) ([]*db.Link, error)
+	GetLinksOfPeriod(ctx context.Context, period time.Duration) ([]*db.Link, error)
 }
 
 // методы по таблице Analytics
@@ -26,9 +27,9 @@ type AnalyticsMethods interface {
 }
 
 // методы кэша
-type CacheMetods interface {
-	Get(ctx context.Context, key string) (*db.Link, error)
-	Set(ctx context.Context, key string, link *db.Link, ttl time.Duration) error
-	Delete(ctx context.Context, key string) error
-	LoadDataToCache(ctx context.Context, warming time.Duration, ttl time.Duration) error
+type CacheMethods interface {
+	GetLink(ctx context.Context, shortURL string) (*db.Link, error)
+	SetLink(ctx context.Context, shortURL string, link *db.Link, ttl time.Duration) error
+	DeleteLink(ctx context.Context, shortURL string) error
+	LoadDataToCache(ctx context.Context, lastLiks []*db.Link, ttl time.Duration) error
 }
