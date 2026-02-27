@@ -1,8 +1,7 @@
 package service
 
 import (
-	"math/rand"
-	"time"
+	"math/rand/v2"
 )
 
 const sizeShortUrl = 6 // длина сгенерированной короткой ссылки ShortURL по умолчанию
@@ -14,8 +13,6 @@ func NewRandomString(size int) string {
 		size = sizeShortUrl
 	}
 
-	rnd := rand.New(rand.NewSource(time.Now().UnixNano()))
-
 	chars := []rune("ABCDEFGHIJKLMNOPQRSTUVWXYZ" +
 		"abcdefghijklmnopqrstuvwxyz" +
 		"0123456789" +
@@ -23,7 +20,7 @@ func NewRandomString(size int) string {
 
 	b := make([]rune, size)
 	for i := range b {
-		b[i] = chars[rnd.Intn(len(chars))]
+		b[i] = chars[rand.N(len(chars))]
 	}
 
 	return string(b)

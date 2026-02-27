@@ -118,7 +118,7 @@ func (d *DataBase) GetLinks(ctx context.Context) ([]*Link, error) {
 
 	query := `SELECT *
 	            FROM links
-			   ORDER BY created_at
+			   ORDER BY created_at DESC
 			   LIMIT $1`
 
 	rows, err := d.Pool.Query(ctx, query, limitGetLinks)

@@ -35,7 +35,7 @@ func (d *DataBase) GetAnalyticsByLinkID(ctx context.Context, linkID int) ([]*Ana
 	}
 	defer rows.Close()
 
-	var analitics []*Analytics
+	var analytics []*Analytics
 	for rows.Next() {
 		var a Analytics
 		err := rows.Scan(
@@ -50,14 +50,14 @@ func (d *DataBase) GetAnalyticsByLinkID(ctx context.Context, linkID int) ([]*Ana
 			return nil, fmt.Errorf("ошибка при сканировании строки списка записей в GetAnalyticsByLinkID: %w", err)
 		}
 
-		analitics = append(analitics, &a)
+		analytics = append(analytics, &a)
 	}
 
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("ошибка при итерации по списку записей в GetAnalyticsByLinkID: %w", err)
 	}
 
-	return analitics, nil
+	return analytics, nil
 }
 
 // агрегация

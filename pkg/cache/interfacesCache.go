@@ -17,5 +17,5 @@ type CacheMethods interface {
 	DeleteLink(ctx context.Context, shortURL string) error
 
 	// LoadDataToCache выполняет прогрев кэша, сохраняя переданный список ссылок
-	LoadDataToCache(ctx context.Context, lastLiks []*db.Link) error
+	LoadDataToCache(ctx context.Context, lastLinks []*db.Link) error
 }
