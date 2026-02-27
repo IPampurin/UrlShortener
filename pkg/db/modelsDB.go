@@ -1,6 +1,9 @@
 package db
 
-import "time"
+import (
+	"net"
+	"time"
+)
 
 // Link представляет запись в таблице links
 type Link struct {
@@ -18,6 +21,6 @@ type Analytics struct {
 	LinkID     int       // идентификатор ссылки, по которой совершён переход
 	AccessedAt time.Time // момент времени, когда произошёл переход
 	UserAgent  string    // строка User-Agent браузера или клиента
-	IPAddress  string    // IP-адрес посетителя
+	IPAddress  net.IP    // IP-адрес посетителя
 	Referer    string    // URL источника перехода
 }

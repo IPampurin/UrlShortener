@@ -57,7 +57,7 @@ func main() {
 	}
 
 	// получаем экземпляр слоя бизнес-логики
-	service := service.InitService(ctx, storage, cache, appLogger)
+	service := service.InitService(ctx, storage, cache)
 
 	// запускаем сервер
 	err = server.Run(ctx, &cfg.Server, service, appLogger)

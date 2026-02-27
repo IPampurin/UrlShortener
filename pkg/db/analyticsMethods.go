@@ -3,16 +3,18 @@ package db
 import (
 	"context"
 	"fmt"
+	"net"
 	"time"
 )
 
 // SaveAnalytics записывает каждый переход
-func (d *DataBase) SaveAnalytics(ctx context.Context, analytics *Analytics) error {
+func (d *DataBase) SaveAnalytics(ctx context.Context, linkID int, accessedAt time.Time, userAgent, ipAddress, referer string) error {
 
 	query := `INSERT INTO analytics (link_id, accessed_at, user_agent, ip_address, referer)
               VALUES ($1, $2, $3, $4, $5)`
 
-	_, err := d.Pool.Exec(ctx, query, analytics.LinkID, analytics.AccessedAt, analytics.UserAgent, analytics.IPAddress, analytics.Referer)
+	ip := net.ParseIP(ipAddress) // если пусто, вернёт nil
+	_, err := d.Pool.Exec(ctx, query, linkID, accessedAt, userAgent, ip, referer)
 	if err != nil {
 		return fmt.Errorf("ошибка добавления записи о переходе в SaveAnalytics: %w", err)
 	}

@@ -2,8 +2,11 @@ package db
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
+
+	"github.com/jackc/pgx/v5"
 )
 
 // SaveLink добавляет новую запись в таблицу links БД
@@ -46,6 +49,9 @@ func (d *DataBase) GetLinkByShortURL(ctx context.Context, shortURL string) (*Lin
 			&link.IsCustom,
 			&link.ClicksCount)
 	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("ошибка получения записи о ссылке в GetLinkByShortURL: %w", err)
 	}
 
@@ -67,20 +73,20 @@ func (d *DataBase) GetLinkByOriginalURL(ctx context.Context, originalURL string)
 
 	links := make([]*Link, 0)
 	for rows.Next() {
-		var l Link
+		var link Link
 		err := rows.Scan(
-			&l.ID,
-			&l.ShortURL,
-			&l.OriginalURL,
-			&l.CreatedAt,
-			&l.IsCustom,
-			&l.ClicksCount,
+			&link.ID,
+			&link.ShortURL,
+			&link.OriginalURL,
+			&link.CreatedAt,
+			&link.IsCustom,
+			&link.ClicksCount,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("ошибка при сканировании строки списка ссылок в GetLinkByOriginalURL: %w", err)
 		}
 
-		links = append(links, &l)
+		links = append(links, &link)
 	}
 
 	if err = rows.Err(); err != nil {
@@ -112,8 +118,8 @@ func (d *DataBase) GetLinks(ctx context.Context) ([]*Link, error) {
 
 	query := `SELECT *
 	            FROM links
-			   LIMIT $1
-			   ORDER BY created_at`
+			   ORDER BY created_at
+			   LIMIT $1`
 
 	rows, err := d.Pool.Query(ctx, query, limitGetLinks)
 	if err != nil {
@@ -121,7 +127,7 @@ func (d *DataBase) GetLinks(ctx context.Context) ([]*Link, error) {
 	}
 	defer rows.Close()
 
-	var links []*Link // чтобы nil возвращался, если ничего нет
+	var links []*Link
 	for rows.Next() {
 		var link Link
 		err := rows.Scan(
@@ -161,7 +167,7 @@ func (d *DataBase) GetLinksOfPeriod(ctx context.Context, period time.Duration) (
 	}
 	defer rows.Close()
 
-	var links []*Link // чтобы nil возвращался, если ничего нет
+	var links []*Link
 	for rows.Next() {
 		var link Link
 		err := rows.Scan(
@@ -181,6 +187,84 @@ func (d *DataBase) GetLinksOfPeriod(ctx context.Context, period time.Duration) (
 
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("ошибка при итерации по списку ссылок в GetLinksOfPeriod: %w", err)
+	}
+
+	return links, nil
+}
+
+// SearchByOriginalURL ищет ссылки, OriginalURL которых содержит подстроку query (регистронезависимо)
+func (d *DataBase) SearchByOriginalURL(ctx context.Context, search string) ([]*Link, error) {
+
+	query := `SELECT *
+	            FROM links
+			   WHERE original_url ILIKE '%' || $1 || '%'
+			   ORDER BY created_at DESC`
+
+	rows, err := d.Pool.Query(ctx, query, search)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при получении списка ссылок в SearchByOriginalURL: %w", err)
+	}
+	defer rows.Close()
+
+	var links []*Link
+	for rows.Next() {
+		var link Link
+		err := rows.Scan(
+			&link.ID,
+			&link.ShortURL,
+			&link.OriginalURL,
+			&link.CreatedAt,
+			&link.IsCustom,
+			&link.ClicksCount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("ошибка при сканировании строки списка ссылок в SearchByOriginalURL: %w", err)
+		}
+
+		links = append(links, &link)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка при итерации по списку ссылок в SearchByOriginalURL: %w", err)
+	}
+
+	return links, nil
+}
+
+// SearchByShortURL ищет ссылки, ShortURL которых содержит подстроку query (регистронезависимо)
+func (d *DataBase) SearchByShortURL(ctx context.Context, search string) ([]*Link, error) {
+
+	query := `SELECT *
+	          FROM links
+			 WHERE short_url ILIKE '%' || $1 || '%'
+			 ORDER BY created_at DESC`
+
+	rows, err := d.Pool.Query(ctx, query, search)
+	if err != nil {
+		return nil, fmt.Errorf("ошибка при получении списка ссылок в SearchByShortURL: %w", err)
+	}
+	defer rows.Close()
+
+	var links []*Link
+	for rows.Next() {
+		var link Link
+		err := rows.Scan(
+			&link.ID,
+			&link.ShortURL,
+			&link.OriginalURL,
+			&link.CreatedAt,
+			&link.IsCustom,
+			&link.ClicksCount,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("ошибка при сканировании строки списка ссылок в SearchByShortURL: %w", err)
+		}
+
+		links = append(links, &link)
+	}
+
+	if err = rows.Err(); err != nil {
+		return nil, fmt.Errorf("ошибка при итерации по списку ссылок в SearchByShortURL: %w", err)
 	}
 
 	return links, nil

@@ -32,13 +32,12 @@ func Run(ctx context.Context, cfgServer *configuration.ConfServer, service *serv
 	})
 
 	// регистрируем эндпоинты
-	apiGroup := engine.Group("/notify")
-	{
-		apiGroup.POST("/shorten", api.CreateShortLink(service, log))          // создание новой сокращённой ссылки
-		apiGroup.GET("/s/:short_url", api.Redirect(service, log))             // переход по короткой ссылке
-		apiGroup.GET("/analytics/:short_url", api.GetAnalytics(service, log)) // получение аналитики (число и время переходов, User-Agent)
-		apiGroup.GET("/links", api.GetLinks(service, log))                    // список последних ссылок для UI
-	}
+	engine.POST("/shorten", api.CreateShortLink(service, log))               // создание новой сокращённой ссылки
+	engine.GET("/s/:short_url", api.Redirect(service, log))                  // переход по короткой ссылке
+	engine.GET("/analytics/:short_url", api.GetAnalytics(service, log))      // получение аналитики (число и время переходов, User-Agent)
+	engine.GET("/links", api.GetLinks(service, log))                         // список последних ссылок для UI
+	engine.GET("/links/search/original", api.SearchByOriginal(service, log)) // поиск по OriginalURL
+	engine.GET("/links/search/short", api.SearchByShort(service, log))       // поиск по ShortURL
 
 	// раздаём статические файлы из папки ./web
 	engine.Static("/static", "./web")

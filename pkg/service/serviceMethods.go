@@ -2,49 +2,51 @@ package service
 
 import (
 	"context"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/IPampurin/UrlShortener/pkg/db"
+	"github.com/wb-go/wbf/logger"
 )
 
-// CreateLink создаёт новую короткую ссылку
-// если customShort не пуст, проверяет его уникальность
-// если originalURL уже существует, возвращает существующую ссылку
-// генерирует случайный shortURL при необходимости
-// сохраняет ссылку в БД и, если кэш доступен, записывает её туда
-func (s *Service) CreateLink(ctx context.Context, originalURL, customShort string) (*db.Link, error) {
+// CreateShortLink создаёт новую короткую ссылку.
+
+func (s *Service) CreateShortLink(ctx context.Context, log logger.Logger, originalURL, customShort string) (*ResponseLink, error) {
 
 	// 1. Если задан кастомный short, проверяем уникальность
 	if customShort != "" {
-		shortURL, err := s.link.GetLinkByShortURL(ctx, customShort)
+		existing, err := s.link.GetLinkByShortURL(ctx, customShort)
 		if err != nil {
-			return nil, fmt.Errorf("ошибка проверки кастомной shortURL: %w", err)
+			return nil, err
 		}
-		if shortURL != nil {
-			return nil, fmt.Errorf("короткая ссылка уже занята")
+		if existing != nil {
+			return nil, errors.New("короткая ссылка уже занята")
 		}
 	}
 
-	// 2. Проверяем, существует ли уже такая оригинальная ссылка (она может быть не одна)
+	// 2. Проверяем, есть ли уже такая оригинальная ссылка
 	links, err := s.link.GetLinkByOriginalURL(ctx, originalURL)
 	if err != nil {
-		return nil, fmt.Errorf("ошибка поиска по оригинальному URL: %w", err)
+		return nil, err
 	}
-
 	if len(links) > 0 {
-		// Возвращаем первую найденную (можно выбрать самую свежую)
-		// Если есть кэш, можно положить её туда для ускорения будущих запросов
-		if s.cache != nil {
-			_ = s.cache.SetLink(ctx, links[0].ShortURL, links[0], 0) // TBD: взять из конфига
+		latest := links[0]
+		for _, l := range links {
+			if l.CreatedAt.After(latest.CreatedAt) {
+				latest = l
+			}
 		}
-		return links[0], nil
+		if s.cache != nil {
+			if err := s.cache.SetLink(ctx, latest.ShortURL, latest); err != nil {
+				log.Ctx(ctx).Error("ошибка сохранения в кэш", "error", err)
+			}
+		}
+		return toResponseLink(latest), nil
 	}
 
 	// 3. Генерируем shortURL, если не задан
 	shortURL := customShort
 	if shortURL == "" {
-		// Генерируем, пока не найдём уникальный
 		for {
 			shortURL = NewRandomString(0)
 			existing, _ := s.link.GetLinkByShortURL(ctx, shortURL)
@@ -57,94 +59,172 @@ func (s *Service) CreateLink(ctx context.Context, originalURL, customShort strin
 	// 4. Создаём новую ссылку
 	link, err := s.link.CreateLink(ctx, originalURL, shortURL, customShort != "")
 	if err != nil {
-		return nil, fmt.Errorf("ошибка сохранения ссылки: %w", err)
+		return nil, err
 	}
 
-	// 5. Сохраняем в кэш, если он доступен
+	// 5. Сохраняем в кэш
 	if s.cache != nil {
-		_ = s.cache.SetLink(ctx, shortURL, link, 0) // TTL можно задать из конфига
+		if err := s.cache.SetLink(ctx, shortURL, link); err != nil {
+			log.Ctx(ctx).Error("ошибка сохранения в кэш", "error", err)
+		}
 	}
 
-	return link, nil
+	return toResponseLink(link), nil
 }
 
-// GetLinkByShortURL возвращает ссылку по короткому URL
-func (s *Service) GetLinkByShortURL(ctx context.Context, shortURL string) (*db.Link, error) {
+// ShortLinkInfo возвращает информацию о ссылке по короткому идентификатору
+func (s *Service) ShortLinkInfo(ctx context.Context, log logger.Logger, shortURL string) (*ResponseLink, error) {
 
-	// проверяем кэш
 	if s.cache != nil {
 		link, err := s.cache.GetLink(ctx, shortURL)
 		if err != nil {
-			// логируем ошибку кэша, но не прерываем
-			// (как добавить логгер в сервис)
+			log.Ctx(ctx).Error("ошибка получения из кэша", "error", err)
 		}
 		if link != nil {
-			return link, nil
+			return toResponseLink(link), nil
 		}
 	}
 
-	// идём в БД
 	link, err := s.link.GetLinkByShortURL(ctx, shortURL)
 	if err != nil {
 		return nil, err
 	}
 	if link == nil {
-		return nil, nil // не найдено
+		return nil, nil
 	}
 
-	// сохраняем в кэш для будущих запросов
 	if s.cache != nil {
-		_ = s.cache.SetLink(ctx, shortURL, link, 0)
+		if err := s.cache.SetLink(ctx, shortURL, link); err != nil {
+			log.Ctx(ctx).Error("ошибка сохранения в кэш", "error", err)
+		}
 	}
 
-	return link, nil
+	return toResponseLink(link), nil
 }
 
-// GetLinkByOriginalURL возвращает все ссылки по оригинальному URL
-// (кэширование здесь не применяем пока что)
-func (s *Service) GetLinkByOriginalURL(ctx context.Context, originalURL string) ([]*db.Link, error) {
+// ShortLinkAnalytics возвращает аналитику по ссылке
+func (s *Service) ShortLinkAnalytics(ctx context.Context, log logger.Logger, shortURL string) (*ResponseAnalytics, error) {
 
-	return s.link.GetLinkByOriginalURL(ctx, originalURL)
+	link, err := s.link.GetLinkByShortURL(ctx, shortURL)
+	if err != nil {
+		return nil, err
+	}
+	if link == nil {
+		return nil, nil
+	}
+
+	analytics, err := s.analytics.GetAnalyticsByLinkID(ctx, link.ID)
+	if err != nil {
+		return nil, err
+	}
+
+	// получаем агрегаты
+	from := time.Now().AddDate(0, -1, 0) // например, последний месяц для демонстрации
+	to := time.Now()
+
+	clicksByDay, err := s.analytics.CountClicksByDay(ctx, link.ID, from, to)
+	if err != nil {
+		log.Ctx(ctx).Error("ошибка агрегации по дням", "error", err)
+		// не фатально, можно оставить пустым
+	}
+
+	clicksByMonth, err := s.analytics.CountClicksByMonth(ctx, link.ID, from, to)
+	if err != nil {
+		log.Ctx(ctx).Error("ошибка агрегации по месяцам", "error", err)
+	}
+
+	clicksByUA, err := s.analytics.CountClicksByUserAgent(ctx, link.ID)
+	if err != nil {
+		log.Ctx(ctx).Error("ошибка агрегации по user-agent", "error", err)
+	}
+
+	followLinks := make([]FollowLink, len(analytics))
+	for i, a := range analytics {
+		followLinks[i] = FollowLink{
+			AccessedAt: a.AccessedAt,
+			UserAgent:  a.UserAgent,
+			IPAddress:  a.IPAddress.String(),
+			Referer:    a.Referer,
+		}
+	}
+
+	return &ResponseAnalytics{
+		Link:              *toResponseLink(link),
+		Analytics:         followLinks,
+		ClicksByDay:       clicksByDay,
+		ClicksByMonth:     clicksByMonth,
+		ClicksByUserAgent: clicksByUA,
+	}, nil
 }
 
-// IncrementClicks увеличивает счётчик переходов по ссылке (вызывается после успешного редиректа)
-func (s *Service) IncrementClicks(ctx context.Context, linkID int64) error {
+// LastLinks возвращает последние ссылки
+func (s *Service) LastLinks(ctx context.Context, log logger.Logger) ([]*ResponseLink, error) {
+
+	links, err := s.link.GetLinks(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*ResponseLink, len(links))
+	for i, l := range links {
+		result[i] = toResponseLink(l)
+	}
+
+	return result, nil
+}
+
+// RecordClick сохраняет информацию о переходе
+func (s *Service) RecordClick(ctx context.Context, log logger.Logger, linkID int, userAgent, ip, referer string) error {
+
+	return s.analytics.SaveAnalytics(ctx, linkID, time.Now(), userAgent, ip, referer)
+}
+
+// IncrementClicks увеличивает счётчик переходов
+func (s *Service) IncrementClicks(ctx context.Context, log logger.Logger, linkID int64) error {
 
 	return s.link.IncrementClicks(ctx, linkID)
 }
 
-// GetLinks возвращает последние 20 ссылок (для UI)
-func (s *Service) GetLinks(ctx context.Context) ([]*db.Link, error) {
+// SearchByOriginalURL ищет среди OriginalURL содержащие query
+func (s *Service) SearchByOriginalURL(ctx context.Context, log logger.Logger, query string) ([]*ResponseLink, error) {
 
-	return s.link.GetLinks(ctx)
+	links, err := s.link.SearchByOriginalURL(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*ResponseLink, len(links))
+	for i, l := range links {
+		result[i] = toResponseLink(l)
+	}
+
+	return result, nil
 }
 
-// SaveAnalytics сохраняет информацию о переходе
-func (s *Service) SaveAnalytics(ctx context.Context, analytics *db.Analytics) error {
+// SearchByShortURL ищет среди ShortURL содержащие query
+func (s *Service) SearchByShortURL(ctx context.Context, log logger.Logger, query string) ([]*ResponseLink, error) {
 
-	return s.analytics.SaveAnalytics(ctx, analytics)
+	links, err := s.link.SearchByShortURL(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+
+	result := make([]*ResponseLink, len(links))
+	for i, l := range links {
+		result[i] = toResponseLink(l)
+	}
+
+	return result, nil
 }
 
-// GetAnalyticsByLinkID возвращает все переходы по ссылке
-func (s *Service) GetAnalyticsByLinkID(ctx context.Context, linkID int) ([]*db.Analytics, error) {
+// toResponseLink преобразует db.Link в service.ResponseLink
+func toResponseLink(l *db.Link) *ResponseLink {
 
-	return s.analytics.GetAnalyticsByLinkID(ctx, linkID)
-}
-
-// CountClicksByDay возвращает статистику переходов по дням
-func (s *Service) CountClicksByDay(ctx context.Context, linkID int, from, to time.Time) (map[string]int, error) {
-
-	return s.analytics.CountClicksByDay(ctx, linkID, from, to)
-}
-
-// CountClicksByMonth возвращает статистику переходов по месяцам
-func (s *Service) CountClicksByMonth(ctx context.Context, linkID int, from, to time.Time) (map[string]int, error) {
-
-	return s.analytics.CountClicksByMonth(ctx, linkID, from, to)
-}
-
-// CountClicksByUserAgent возвращает статистику переходов по User-Agent
-func (s *Service) CountClicksByUserAgent(ctx context.Context, linkID int) (map[string]int, error) {
-
-	return s.analytics.CountClicksByUserAgent(ctx, linkID)
+	return &ResponseLink{
+		ID:          l.ID,
+		ShortURL:    l.ShortURL,
+		OriginalURL: l.OriginalURL,
+		CreatedAt:   l.CreatedAt,
+		ClicksCount: l.ClicksCount,
+	}
 }

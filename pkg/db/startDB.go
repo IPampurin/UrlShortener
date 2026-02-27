@@ -35,12 +35,14 @@ func InitDB(ctx context.Context, cfgDb *configuration.ConfDB, log logger.Logger)
 
 	storage := &DataBase{pgxConn}
 
+	log.Info("Клиент БД получен.")
+
 	// запускаем миграции
 	if err = storage.Migration(ctx); err != nil {
 		return nil, fmt.Errorf("ошибка миграций: %w", err)
 	}
 
-	log.Info("база данных успешно запущена, миграции применены.")
+	log.Info("База данных успешно запущена, миграции применены.")
 
 	return storage, nil
 }

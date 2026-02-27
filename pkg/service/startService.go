@@ -5,17 +5,15 @@ import (
 
 	"github.com/IPampurin/UrlShortener/pkg/cache"
 	"github.com/IPampurin/UrlShortener/pkg/db"
-	"github.com/IPampurin/UrlShortener/pkg/interfaces"
-	"github.com/wb-go/wbf/logger"
 )
 
 type Service struct {
-	link      interfaces.LinkMethods
-	analytics interfaces.AnalyticsMethods
-	cache     interfaces.CacheMethods
+	link      db.LinkMethods
+	analytics db.AnalyticsMethods
+	cache     cache.CacheMethods
 }
 
-func InitService(ctx context.Context, storage *db.DataBase, cache *cache.Cache, log logger.Logger) *Service {
+func InitService(ctx context.Context, storage *db.DataBase, cache *cache.Cache) *Service {
 
 	svc := &Service{
 		link:      storage, // *db.DataBase реализует LinkMethods

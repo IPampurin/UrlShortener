@@ -3,6 +3,7 @@ package cache
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/IPampurin/UrlShortener/pkg/configuration"
 	"github.com/IPampurin/UrlShortener/pkg/db"
@@ -17,7 +18,9 @@ import (
 
 // Cache хранит подключение к БД Redis
 type Cache struct {
-	*redis.Client
+	redis   *redis.Client
+	ttl     time.Duration
+	warming time.Duration
 }
 
 // InitCache запускает работу с Redis
@@ -44,19 +47,23 @@ func InitCache(ctx context.Context, storage *db.DataBase, cfgCache *configuratio
 	}
 
 	// получаем экземпляр
-	cache := &Cache{clientRedis}
+	cache := &Cache{
+		redis:   clientRedis,
+		ttl:     cfgCache.TTL,
+		warming: cfgCache.Warming,
+	}
 
 	// прогреваем кэш, если с ним всё норм
-	if cache != nil {
+	if cache.redis != nil {
 
 		// получаем список крайних записей
-		links, err := storage.GetLinksOfPeriod(ctx, cfgCache.Warming)
+		links, err := storage.GetLinksOfPeriod(ctx, cache.warming)
 		if err != nil {
 			log.Warn("ошибка прогрева кэша", "error", err)
 		}
 
 		// грузим записи в кэш
-		err = cache.LoadDataToCache(ctx, links, cfgCache.TTL)
+		err = cache.LoadDataToCache(ctx, links)
 		if err != nil {
 			log.Warn("ошибка прогрева кэша", "error", err)
 		}
